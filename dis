@@ -1,0 +1,273 @@
+#!/usr/bin/env python
+#
+# dis
+#
+# Prototype/proof-of-concept for "stripping" a docker image down to it's bare
+# essentials.
+
+import os
+import sys
+import json
+import errno
+import shutil
+import tarfile
+import tempfile
+import subprocess
+from optparse import OptionParser
+
+try:
+    import docker
+except ImportError, e:
+    print "ERROR: docker-py not found"
+    print "       https://github.com/docker/docker-py"
+    print e
+    sys.exit(1)
+
+debug = False
+
+def parse_commandline():
+    """
+    parse_commandline
+
+    Parse the command line arguments and handle missing args, returns a
+    dict of all options (disjoint args are discarded).
+    """
+    parser = OptionParser()
+    parser.add_option('-i', '--image', dest='docker_img',
+        help="REQUIRED: Docker image name:tag to you would like to 'strip'")
+    parser.add_option('-e', '--executable', dest='executable',
+        help="REQUIRED: Executable that is targeted for the image")
+    parser.add_option('-d', '--debug', action="store_true", dest='debug',
+        help="Enable debugging output", default=False)
+
+    if len(sys.argv) < 2:
+        print "ERROR: No arg passed"
+        parser.print_help()
+        sys.exit(1)
+
+    (options, _) = parser.parse_args()
+
+    if not options.docker_img:
+        print "ERROR: Missing docker image name"
+        sys.exit(2)
+    if ":" not in options.docker_img or \
+                (len(options.docker_img.split(":")) < 2):
+        print "ERROR: Missing tag name"
+        sys.exit(2)
+
+    if not options.executable:
+        print "ERROR: Missing executable"
+        sys.exit(2)
+
+    return options
+
+def walk_image_layers(basedir, name, tag):
+    """
+    walk_image_layers
+
+    Walk through the layers, gathering each parent so that we can extract the
+    layers to start inspecting things.
+
+    :params:
+        basedir - base directory where the extracted image is
+        name    - image name
+        tag     - image tag
+
+    :returns:
+        (list) image layer ids, ordered bottom-up
+    """
+
+    # Load the repositories information from the image json
+    image_info = json.load(open(os.path.join(basedir, "repositories"),'r'))
+    top_layer = image_info[name][tag]
+
+    # list of layers
+    layers = []
+
+    # need to start at the "top level" layer in the image
+    # cd into top layer's directory to read it's metadata
+    os.chdir(os.path.join(basedir,top_layer))
+
+    # Keep walking to parent dirs until we're done
+    while True:
+        layer_json = json.load(open("./json",'r'))
+        layers.append(layer_json['id'])
+
+        if debug:
+            print 'DEBUG: walk_image_layers: CWD: %s' % os.getcwd()
+            print 'DEBUG: walk_image_layers: layer_json["id"]: %s' % layer_json['id']
+
+        if 'parent' not in layer_json.keys():
+            break
+        os.chdir(os.path.join(basedir, layer_json['parent']))
+
+    # We put them in order from top-down but need to extract from bottom to top
+    layers.reverse()
+    return layers
+
+def create_chroot(basedir, chrootdir, image_layers):
+    """
+    create_chroot
+
+    Extract each layered tarball into a chroot to manipulate
+
+    :params:
+        basedir       - base working directory
+        chrootdir     - path to where the chroot should be created
+        image_layers  - list of image layers, expected to be ordered bottom-up
+    """
+    if debug:
+        print "DEBUG: create_chroot: chrootdir: %s" % chrootdir
+    if not os.path.isdir(chrootdir):
+        os.mkdir(chrootdir)
+
+    for image_layer in image_layers:
+        layer_tar = tarfile.TarFile(
+            os.path.join(
+                basedir,
+                image_layer,
+                "layer.tar"
+            )
+        )
+        layer_tar.extractall(path=chrootdir)
+
+def determine_necessary_files(target_exec):
+    """
+    determine_necessary_files
+
+    Determine the necessary files that must be in the image to run.
+
+    :params:
+        target_exec - Target executable for the container to run
+
+    :returns:
+        (list) required files
+    """
+    required_files = []
+
+    #FIXME - right now all this does is runs ldd and parses the output
+    #        in the future this should be more intelligent
+
+    run_ldd = subprocess.Popen(
+        '/usr/bin/ldd %s' % target_exec,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True
+    )
+    for line in run_ldd.stdout:
+        line = line.strip()
+        if '=>' in line:
+            if 'linux-vdso' not in line:
+                required_files.append(line.split()[2])
+        else:
+            if line.strip()[0] == '/':
+                required_files.append(line.split()[0])
+
+    return required_files
+
+# Shamelessly borrowed from:
+#   http://stackoverflow.com/questions/600268/mkdir-p-functionality-in-python
+def mkdir_p(path):
+    if debug:
+        print "DEBUG: mkdir_p: path: %s" % path
+    try:
+        os.makedirs(path)
+    except OSError as exc: # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
+
+
+
+
+
+###############################################################################
+# "main"
+###############################################################################
+if __name__ == '__main__':
+    opts = parse_commandline()
+
+    if opts.debug:
+        debug = True
+
+    # Determine name and tag, handle posibility of local registry that supplies
+    # a port number
+    if opts.docker_img:
+        image_tmpinfo = opts.docker_img.split(':')
+        image_tag = image_tmpinfo.pop()
+        image_name = "".join(image_tmpinfo)
+
+    # FIXME - Should allow user to select the docker client base_url
+    dc = docker.Client(base_url='unix://var/run/docker.sock')
+
+    # Get the image the user provided us with
+    working_image = dc.get_image(opts.docker_img)
+
+    # save the image to a tar file
+    working_dir = tempfile.mkdtemp()
+    if debug:
+        print "DEBUG: __main__: working_dir: %s" % working_dir
+    working_tar_path = tempfile.mktemp(prefix=working_dir, suffix=".tar")
+    tf = open(working_tar_path, 'w')
+    tf.write(working_image.data)
+    tf.close()
+
+    # Extract the tarfile
+    working_tar = tarfile.TarFile(working_tar_path)
+    working_tar.extractall(path=working_dir)
+
+    image_layers = walk_image_layers(working_dir, image_name, image_tag)
+
+    required_files = determine_necessary_files(opts.executable)
+    required_files.append(opts.executable)
+
+    if debug:
+        print "DEBUG: __main__: required_files: %s" % required_files
+
+    # The chroot that we will eventually create the new image tarball from
+    from_chroot = os.path.join(working_dir,"chroot")
+    if debug:
+        print "DEBUG: __main__: from_chroot: %s" % from_chroot
+    create_chroot(working_dir, from_chroot, image_layers)
+
+    # Create the stripped tarball
+    # FIXME  - I thought about making this a function and still might, but it
+    #          was a lot of args to pass, wasn't sure if it was worth it.
+    stripped_dir = tempfile.mkdtemp()
+
+    if debug:
+        print "DEBUG: __main__: stripped_dir: %s" % stripped_dir
+
+    # Can't os.path.join because it's too smart and tries to merge the
+    # multiple uses of /tmp/
+    for file_name in required_files:
+        file_dirname = os.path.dirname(file_name)
+        if file_dirname != '/':
+            mkdir_p("%s/%s" % (stripped_dir, file_dirname))
+        shutil.copy(
+            "%s/%s" % (from_chroot, file_name),
+            "%s/%s" % (stripped_dir, file_name)
+        )
+
+    # FIXME - need to sort this out in python
+    # stripped_tar = tarfile.TarFile(os.path.join(basedir,), 'w')
+    #
+    # Just ran this as a subprocess because I found docs on it here:
+    # http://docs.docker.com/articles/baseimages/
+
+    run_tar_docker_import = subprocess.Popen(
+        '/bin/tar -C %s -c . | /usr/bin/docker import - %s-stripped' % (
+            stripped_dir,
+            image_name
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        shell=True
+    )
+    rc = run_tar_docker_import.wait()
+    out, err = run_tar_docker_import.communicate()
+    if debug or (rc != 0):
+        print "DEBUG: __main__: run_tar_docker_import.stdout:\n%s\n" % out
+        print "DEBUG: __main__: run_tar_docker_import.stderr:\n%s\n" % err
+
+
