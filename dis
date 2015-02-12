@@ -161,10 +161,19 @@ def determine_necessary_files(chroot_path, target_exec):
 
     # FIXME - probably need to handle this better later
     for fname in persist_files:
+        if debug:
+            print \
+                "DEBUG: determine_necessary_files: persist_files: fname: %s" \
+                % fname
         # Handle globs
         if '*' in fname:
             persist_files.remove(fname)
-            persist_files.extend(glob.glob('%s/%s' % (chroot_path, fname)))
+            fname_glob = glob.glob('%s/%s' % (chroot_path, fname))
+            if debug:
+                print \
+                    "DEBUG: determine_necessary_files: persist_files: fname_glob: %s" \
+                    % fname_glob
+            persist_files.extend(fname_glob)
     required_files.extend(persist_files)
 
 
