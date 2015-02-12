@@ -133,13 +133,14 @@ def create_chroot(basedir, chrootdir, image_layers):
             print "DEBUG: create_chroot: layer_tar: %s" % layer_tar.name
         layer_tar.extractall(path=chrootdir)
 
-def determine_necessary_files(target_exec):
+def determine_necessary_files(chroot_path, target_exec):
     """
     determine_necessary_files
 
     Determine the necessary files that must be in the image to run.
 
     :params:
+        chroot_path - Path to find the chroot built from extracted image layers
         target_exec - Target executable for the container to run
 
     :returns:
@@ -151,19 +152,31 @@ def determine_necessary_files(target_exec):
     #        in the future this should be more intelligent
 
     run_ldd = subprocess.Popen(
-        '/usr/bin/ldd %s' % target_exec,
+        'chroot %s /bin/ldd %s' % (chroot_path, target_exec),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         shell=True
     )
-    for line in run_ldd.stdout:
+    rc = run_ldd.wait()
+    out, err = run_ldd.communicate()
+    if debug:
+        print 'DEBUG: determine_necessary_files: run_ldd.stdout: \n%s\n' % out
+        print 'DEBUG: determine_necessary_files: run_ldd.stderr: \n%s\n' % err
+    if rc != 0:
+        print "ERROR: determine_necessary_files: run_ldd: rc != 0: %s\n%s\n" % \
+            (out, err)
+        sys.exit(2)
+
+
+    for line in out.split('\n'):
         line = line.strip()
-        if '=>' in line:
-            if 'linux-vdso' not in line:
-                required_files.append(line.split()[2])
-        else:
-            if line.strip()[0] == '/':
-                required_files.append(line.split()[0])
+        if len(line) > 0:
+            if '=>' in line:
+                if 'linux-vdso' not in line:
+                    required_files.append(line.split()[2])
+            else:
+                if line.strip()[0] == '/':
+                    required_files.append(line.split()[0])
 
     return required_files
 
@@ -220,17 +233,16 @@ if __name__ == '__main__':
 
     image_layers = walk_image_layers(working_dir, image_name, image_tag)
 
-    required_files = determine_necessary_files(opts.executable)
-    required_files.append(opts.executable)
-
-    if debug:
-        print "DEBUG: __main__: required_files: %s" % required_files
-
     # The chroot that we will eventually create the new image tarball from
     from_chroot = os.path.join(working_dir,"chroot")
     if debug:
         print "DEBUG: __main__: from_chroot: %s" % from_chroot
     create_chroot(working_dir, from_chroot, image_layers)
+
+    required_files = determine_necessary_files(from_chroot, opts.executable)
+    required_files.append(opts.executable)
+    if debug:
+        print "DEBUG: __main__: required_files: %s" % required_files
 
     # Create the stripped tarball
     # FIXME  - I thought about making this a function and still might, but it

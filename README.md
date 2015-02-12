@@ -8,6 +8,8 @@ Right now things are just being prototyped as a proof of concept. If things mate
 ## Example
 The proof of concept works for binary executables that are dynamically linked (relying on ldd for now).
 
+NOTE: This needs to be run as root or as sudo (at least for now) becuase it runs `chroot` and some of the layered tarballs from docker images that get extracted often try to set perms that normal users can’t.
+
 ```shell
 $ docker images
 REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
