@@ -18,11 +18,11 @@ $ ./dis -i fedora:21 -e ‘/bin/bash’
 
 $ docker images
 REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
-fedora-stripped     latest              e31cc2264baf        18 seconds ago      3.451 MB
+fedora              21-stripped         1694d8015aa4        3 seconds ago       3.451 MB
 fedora              21                  834629358fe2        6 weeks ago         250.2 MB
 fedora              latest              834629358fe2        6 weeks ago         250.2 MB
 
-$ docker run -ti fedora-stripped /bin/bash
+$ docker run -ti fedora:21-stripped /bin/bash
 bash-4.3# ls
 bash: ls: command not found
 bash-4.3# echo “it worked”

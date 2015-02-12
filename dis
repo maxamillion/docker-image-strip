@@ -256,9 +256,10 @@ if __name__ == '__main__':
     # http://docs.docker.com/articles/baseimages/
 
     run_tar_docker_import = subprocess.Popen(
-        '/bin/tar -C %s -c . | /usr/bin/docker import - %s-stripped' % (
+        '/bin/tar -C %s -c . | /usr/bin/docker import - %s:%s-stripped' % (
             stripped_dir,
-            image_name
+            image_name,
+            image_tag
         ),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
