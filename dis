@@ -25,6 +25,16 @@ except ImportError, e:
 
 debug = False
 
+# FIXME
+# This is a list of files we want to persist at all times, in all reality
+# this should eventually be broken out into something that's configurable.
+#
+# Maybe set a list of defaults but allow for a command line arg to override
+persist_files = [
+    "/etc/passwd",
+    "/etc/group",
+]
+
 def parse_commandline():
     """
     parse_commandline
@@ -241,6 +251,7 @@ if __name__ == '__main__':
 
     required_files = determine_necessary_files(from_chroot, opts.executable)
     required_files.append(opts.executable)
+    required_files.extend(persist_files)
     if debug:
         print "DEBUG: __main__: required_files: %s" % required_files
 
