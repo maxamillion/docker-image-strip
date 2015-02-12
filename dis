@@ -129,6 +129,8 @@ def create_chroot(basedir, chrootdir, image_layers):
                 "layer.tar"
             )
         )
+        if debug:
+            print "DEBUG: create_chroot: layer_tar: %s" % layer_tar.name
         layer_tar.extractall(path=chrootdir)
 
 def determine_necessary_files(target_exec):
