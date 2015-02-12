@@ -8,6 +8,7 @@
 import os
 import sys
 import json
+import glob
 import errno
 import shutil
 import tarfile
@@ -158,6 +159,15 @@ def determine_necessary_files(chroot_path, target_exec):
     """
     required_files = []
 
+    # FIXME - probably need to handle this better later
+    for fname in persist_files:
+        # Handle globs
+        if '*' in fname:
+            persist_files.remove(fname)
+            persist_files.extend(glob.glob('%s/%s' % (chroot_path, fname)))
+    required_files.extend(persist_files)
+
+
     #FIXME - right now all this does is runs ldd and parses the output
     #        in the future this should be more intelligent
 
@@ -251,7 +261,6 @@ if __name__ == '__main__':
 
     required_files = determine_necessary_files(from_chroot, opts.executable)
     required_files.append(opts.executable)
-    required_files.extend(persist_files)
     if debug:
         print "DEBUG: __main__: required_files: %s" % required_files
 
@@ -266,6 +275,7 @@ if __name__ == '__main__':
     # Can't os.path.join because it's too smart and tries to merge the
     # multiple uses of /tmp/
     for file_name in required_files:
+
         file_dirname = os.path.dirname(file_name)
         if file_dirname != '/':
             mkdir_p("%s/%s" % (stripped_dir, file_dirname))
