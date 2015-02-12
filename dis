@@ -269,10 +269,13 @@ if __name__ == '__main__':
         file_dirname = os.path.dirname(file_name)
         if file_dirname != '/':
             mkdir_p("%s/%s" % (stripped_dir, file_dirname))
-        shutil.copy(
-            "%s/%s" % (from_chroot, file_name),
-            "%s/%s" % (stripped_dir, file_name)
-        )
+
+        origin = "%s/%s" % (from_chroot, file_name)
+        destination = "%s/%s" % (stripped_dir, file_name)
+        if os.path.isdir(origin):
+            shutil.copytree(origin, destination, symlinks=True)
+        else:
+            shutil.copy(origin, destination)
 
     # FIXME - need to sort this out in python
     # stripped_tar = tarfile.TarFile(os.path.join(basedir,), 'w')
