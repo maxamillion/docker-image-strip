@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # dis
 #
@@ -18,10 +18,10 @@ from optparse import OptionParser
 
 try:
     import docker
-except ImportError, e:
-    print "ERROR: docker-py not found"
-    print "       https://github.com/docker/docker-py"
-    print e
+except ImportError as e:
+    print("ERROR: docker-py not found")
+    print("       https://github.com/docker/docker-py")
+    print("%s" % e)
     sys.exit(1)
 
 debug = False
@@ -52,22 +52,22 @@ def parse_commandline():
         help="Enable debugging output", default=False)
 
     if len(sys.argv) < 2:
-        print "ERROR: No arg passed"
+        print("ERROR: No arg passed")
         parser.print_help()
         sys.exit(1)
 
     (options, _) = parser.parse_args()
 
     if not options.docker_img:
-        print "ERROR: Missing docker image name"
+        print("ERROR: Missing docker image name")
         sys.exit(2)
     if ":" not in options.docker_img or \
                 (len(options.docker_img.split(":")) < 2):
-        print "ERROR: Missing tag name"
+        print("ERROR: Missing tag name")
         sys.exit(2)
 
     if not options.executable:
-        print "ERROR: Missing executable"
+        print("ERROR: Missing executable")
         sys.exit(2)
 
     return options
@@ -105,8 +105,8 @@ def walk_image_layers(basedir, name, tag):
         layers.append(layer_json['id'])
 
         if debug:
-            print 'DEBUG: walk_image_layers: CWD: %s' % os.getcwd()
-            print 'DEBUG: walk_image_layers: layer_json["id"]: %s' % layer_json['id']
+            print('DEBUG: walk_image_layers: CWD: %s' % os.getcwd())
+            print('DEBUG: walk_image_layers: layer_json["id"]: %s' % layer_json['id'])
 
         if 'parent' not in layer_json.keys():
             break
@@ -128,7 +128,7 @@ def create_chroot(basedir, chrootdir, image_layers):
         image_layers  - list of image layers, expected to be ordered bottom-up
     """
     if debug:
-        print "DEBUG: create_chroot: chrootdir: %s" % chrootdir
+        print("DEBUG: create_chroot: chrootdir: %s" % chrootdir)
     if not os.path.isdir(chrootdir):
         os.mkdir(chrootdir)
 
@@ -141,7 +141,7 @@ def create_chroot(basedir, chrootdir, image_layers):
             )
         )
         if debug:
-            print "DEBUG: create_chroot: layer_tar: %s" % layer_tar.name
+            print("DEBUG: create_chroot: layer_tar: %s" % layer_tar.name)
         layer_tar.extractall(path=chrootdir)
 
 def determine_necessary_files(chroot_path, target_exec):
@@ -162,17 +162,17 @@ def determine_necessary_files(chroot_path, target_exec):
     # FIXME - probably need to handle this better later
     for fname in persist_files:
         if debug:
-            print \
+            print(
                 "DEBUG: determine_necessary_files: persist_files: fname: %s" \
-                % fname
+                % fname)
         # Handle globs
         if '*' in fname:
             persist_files.remove(fname)
             fname_glob = glob.glob('%s/%s' % (chroot_path, fname))
             if debug:
-                print \
+                print(
                     "DEBUG: determine_necessary_files: persist_files: fname_glob: %s" \
-                    % fname_glob
+                    % fname_glob)
             persist_files.extend(fname_glob)
     required_files.extend(persist_files)
 
@@ -188,12 +188,14 @@ def determine_necessary_files(chroot_path, target_exec):
     )
     rc = run_ldd.wait()
     out, err = run_ldd.communicate()
+    out = out.decode('utf8')
+    err = err.decode('utf8')
     if debug:
-        print 'DEBUG: determine_necessary_files: run_ldd.stdout: \n%s\n' % out
-        print 'DEBUG: determine_necessary_files: run_ldd.stderr: \n%s\n' % err
+        print('DEBUG: determine_necessary_files: run_ldd.stdout: \n%s\n' % out)
+        print('DEBUG: determine_necessary_files: run_ldd.stderr: \n%s\n' % err)
     if rc != 0:
-        print "ERROR: determine_necessary_files: run_ldd: rc != 0: %s\n%s\n" % \
-            (out, err)
+        print("ERROR: determine_necessary_files: run_ldd: rc != 0: %s\n%s\n" % \
+            (out, err))
         sys.exit(2)
 
 
@@ -213,7 +215,7 @@ def determine_necessary_files(chroot_path, target_exec):
 #   http://stackoverflow.com/questions/600268/mkdir-p-functionality-in-python
 def mkdir_p(path):
     if debug:
-        print "DEBUG: mkdir_p: path: %s" % path
+        print("DEBUG: mkdir_p: path: %s" % path)
     try:
         os.makedirs(path)
     except OSError as exc: # Python >2.5
@@ -242,7 +244,7 @@ if __name__ == '__main__':
         image_name = "".join(image_tmpinfo)
 
     # FIXME - Should allow user to select the docker client base_url
-    dc = docker.Client(base_url='unix://var/run/docker.sock')
+    dc = docker.Client(base_url='unix://run/docker.sock', timeout=1000)
 
     # Get the image the user provided us with
     working_image = dc.get_image(opts.docker_img)
@@ -250,9 +252,9 @@ if __name__ == '__main__':
     # save the image to a tar file
     working_dir = tempfile.mkdtemp()
     if debug:
-        print "DEBUG: __main__: working_dir: %s" % working_dir
+        print("DEBUG: __main__: working_dir: %s" % working_dir)
     working_tar_path = tempfile.mktemp(prefix=working_dir, suffix=".tar")
-    tf = open(working_tar_path, 'w')
+    tf = open(working_tar_path, 'wb')
     tf.write(working_image.data)
     tf.close()
 
@@ -265,13 +267,13 @@ if __name__ == '__main__':
     # The chroot that we will eventually create the new image tarball from
     from_chroot = os.path.join(working_dir,"chroot")
     if debug:
-        print "DEBUG: __main__: from_chroot: %s" % from_chroot
+        print("DEBUG: __main__: from_chroot: %s" % from_chroot)
     create_chroot(working_dir, from_chroot, image_layers)
 
     required_files = determine_necessary_files(from_chroot, opts.executable)
     required_files.append(opts.executable)
     if debug:
-        print "DEBUG: __main__: required_files: %s" % required_files
+        print("DEBUG: __main__: required_files: %s" % required_files)
 
     # Create the stripped tarball
     # FIXME  - I thought about making this a function and still might, but it
@@ -279,7 +281,7 @@ if __name__ == '__main__':
     stripped_dir = tempfile.mkdtemp()
 
     if debug:
-        print "DEBUG: __main__: stripped_dir: %s" % stripped_dir
+        print("DEBUG: __main__: stripped_dir: %s" % stripped_dir)
 
     # Can't os.path.join because it's too smart and tries to merge the
     # multiple uses of /tmp/
@@ -314,8 +316,10 @@ if __name__ == '__main__':
     )
     rc = run_tar_docker_import.wait()
     out, err = run_tar_docker_import.communicate()
+    out = out.decode('utf8')
+    err = err.decode('utf8')
     if debug or (rc != 0):
-        print "DEBUG: __main__: run_tar_docker_import.stdout:\n%s\n" % out
-        print "DEBUG: __main__: run_tar_docker_import.stderr:\n%s\n" % err
+        print("DEBUG: __main__: run_tar_docker_import.stdout:\n%s\n" % out)
+        print("DEBUG: __main__: run_tar_docker_import.stderr:\n%s\n" % err)
 
 # vim: tabstop=8 expandtab shiftwidth=4 softtabstop=4
