@@ -142,6 +142,16 @@ def create_chroot(basedir, chrootdir, image_layers):
         )
         if debug:
             print("DEBUG: create_chroot: layer_tar: %s" % layer_tar.name)
+
+        # Make sure to handle duplicate files
+        # FIXME - we're walking everything multiple times, there's probably a
+        #         better/faster way to do this and we should find it and do it
+        layer_tar_files = layer_tar.getmembers()
+        for tarinfo in layer_tar_files:
+            layer_tar_file = "%s/%s" % (chrootdir,tarinfo.name)
+            if os.path.isfile(layer_tar_file):
+                os.remove(layer_tar_file)
+
         layer_tar.extractall(path=chrootdir)
 
 def determine_necessary_files(chroot_path, target_exec):
