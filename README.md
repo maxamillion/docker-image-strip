@@ -62,8 +62,8 @@ Traceback (most recent call last):
 UnicodeDecodeError: 'utf8' codec can't decode byte 0xc0 in position 4: invalid start byte
 [
 ```
-    * This unfortunately leaves RHEL/CentOS 7 out of the mix as a host for performing the stripping on until python3 makes it into EPEL7[[0]](https://lists.fedoraproject.org/pipermail/epel-devel/2015-January/010700.html)[[1]](https://fedoraproject.org/wiki/User:Bkabrda/EPEL7_Python3)
-    * The following is a possible work around, but you require access to python33 from [SoftwareCollections.org](https://www.softwarecollections.org/) or [RHSCL](https://access.redhat.com/documentation/en-US/Red_Hat_Software_Collections/)
+  * This unfortunately leaves RHEL/CentOS 7 out of the mix as a host for performing the stripping on until python3 makes it into EPEL7[[0]](https://lists.fedoraproject.org/pipermail/epel-devel/2015-January/010700.html)[[1]](https://fedoraproject.org/wiki/User:Bkabrda/EPEL7_Python3)
+  * The following is a possible work around, but you require access to python33 from [SoftwareCollections.org](https://www.softwarecollections.org/) or [RHSCL](https://access.redhat.com/documentation/en-US/Red_Hat_Software_Collections/)
 ```
 $ scl enable python33 'bash'
 
