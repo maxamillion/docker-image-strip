@@ -37,7 +37,7 @@ exit
 
 #### NOTES
   * This needs to be run as root or as sudo (at least for now) becuase it runs `chroot` and some of the layered tarballs from docker images that get extracted often try to set perms that normal users can’t.
-  * Requires python3 because of an interesting bug in python2’s tarfile implementation that occurs only on *some* images tarball layers, example:
+  * Requires python3 because of an interesting bug in python2’s tarfile implementation that occurs only on *some* images tarball layers ([Bug Filed](https://bugzilla.redhat.com/show_bug.cgi?id=1194473)), example:
 ```
 $ ./dis -i centos7:httpd -e '/usr/sbin/httpd'
 Traceback (most recent call last):
